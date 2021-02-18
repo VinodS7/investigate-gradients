@@ -1,8 +1,3 @@
-"""
-Code taken from pytorch tutorial for mnist
-"""
-
-
 from __future__ import print_function
 import argparse
 import torch
@@ -18,51 +13,6 @@ import matplotlib.pyplot as plt
 
 import attribution_methods
 from  model import Net
-
-def train(args, model, device, train_loader, optimizer, epoch):
-    model.train()
-    for batch_idx, (data, target) in enumerate(train_loader):
-        data, target = data.to(device), target.to(device)
-        optimizer.zero_grad()
-        output = model(data)
-        loss = F.nll_loss(output, target)
-        loss.backward()
-        optimizer.step()
-        if batch_idx % args.log_interval == 0:
-            print('Train Epoch: {} [{}/{} ({:.0f}%)]\tLoss: {:.6f}'.format(
-                epoch, batch_idx * len(data), len(train_loader.dataset),
-                100. * batch_idx / len(train_loader), loss.item()))
-            if args.dry_run:
-                break
-def train_raw_data(args, model, device, train_data, train_label, optimizer, epoch):
-    model.train()
-    epoch_done = False
-    count = 0
-    idx = np.arange(len(train_data))
-    np.random.shuffle(idx)
-    for i in range(0, len(train_data), args.batch_size):
-        if(i+args.batch_size>len(train_data)):
-            temp = idx[i:]
-        else:
-            temp = idx[i:i+args.batch_size]
-        batch_data = train_data[temp,:,:,:]
-        batch_label = train_label[temp]
-        optimizer.zero_grad()
-        output = model(torch.from_numpy(batch_data).to(device))
-        if(args.classifier_type=='softmax'):
-            loss = F.nll_loss(output, torch.from_numpy(batch_label).to(device))
-        elif(args.classifier_type=='sigmoid'):
-            loss = F.binary_cross_entropy(torch.squeeze(output), torch.from_numpy(batch_label.astype(np.float32)).to(device))
-        loss.backward()
-        optimizer.step()
-
-        count+=len(temp)
-        
-        if count % args.log_interval == 0:
-            print('Train Epoch: {} [{}/{} ({:.0f}%)]\tLoss: {:.6f}'.format(
-                epoch, count, len(train_data),
-                100. * count / len(train_data), loss.item()))
-            
 
 def test(model, device, test_loader):
     model.eval()
@@ -83,6 +33,7 @@ def test(model, device, test_loader):
         100. * correct / len(test_loader.dataset)))
 
 def test_raw_data(args, model, device, test_data, test_label):
+    
     model.eval()
     test_loss = 0
     correct = 0
@@ -129,16 +80,16 @@ def saliency_map(model_fn, x, label, classifier_type):
         outputs = model_fn(x)
         #input(outputs)
         outputs_max, _ = torch.max(outputs,dim=1)
-        input(outputs_max)
+        #input(outputs_max.size())
         #outputs_max = outputs[:,outputs_max_index]
         #input(outputs_max.size())
-        grad, = torch.autograd(outputs_max, [x])
+        grad, = torch.autograd.grad(outputs_max, [x])
     elif(classifier_type=='sigmoid'):
         outputs = model_fn(x)
-        grad, = torch.autograd(outputs, [x])
+        grad, = torch.autograd.grad(outputs, [x])
 
 
-    input(grad.size())
+    #input(grad.size())
     return grad.cpu().detach().numpy()
 
 
@@ -159,23 +110,12 @@ def test_attributed_data(args, model, device, test_data, test_label, attribution
         batch_data = test_data[temp,:,:,:]
         batch_label = test_label[temp]  
         g = loss_grad(model, torch.from_numpy(batch_data).to(device).requires_grad_(True), torch.from_numpy(batch_label).to(device), args.classifier_type)
-        #s = saliency_map(model, torch.from_numpy(batch_data).to(device).requires_grad_(True), torch.from_numpy(batch_label).to(device), args.classifier_type)
- 
+        #g = saliency_map(model, torch.from_numpy(batch_data).to(device).requires_grad_(True), torch.from_numpy(batch_label).to(device), args.classifier_type)
+        #print(g.shape)
+        #input(s.shape)
         for j in range(batch_data.shape[0]):
-            #temp = (batch_data[j]*0.3081)+0.1307
-            #temp = np.squeeze(temp)
-            #plt.imshow(temp)
-            #plt.savefig('orig_img'+str(j)+'.png')
-            #plt.close()
             batch_data[j,:,:,:], v = attribution_method.apply_attribution(batch_data[j,:,:,:].copy(), g[j])
-            
             attribution_method.contribution_signs(batch_data[j,:,:,:].copy(), g[j])
-            #temp = (batch_data[j]*0.3081)+0.1307
-            #temp = np.squeeze(temp)
-            #plt.imshow(temp)
-            #plt.savefig('mod_KAR_img'+str(j)+'.png')
-            #plt.close()
-            #input('wait')
         output = model(torch.from_numpy(batch_data).to(device))
         if(args.classifier_type=='softmax'):
             test_loss+= F.nll_loss(output, torch.from_numpy(batch_label).to(device))
@@ -189,12 +129,48 @@ def test_attributed_data(args, model, device, test_data, test_label, attribution
     print('positive inputs: ',attribution_method.ctrb_sgns[0,:])
     print('negative inputs: ', attribution_method.ctrb_sgns[1,:])
     print('zero inputs: ', attribution_method.ctrb_sgns[2,:])
-    input(attribution_method.ctrb_sgns/np.sum(attribution_method.ctrb_sgns))
+    #input(attribution_method.ctrb_sgns/np.sum(attribution_method.ctrb_sgns))
     test_loss /= len(test_data)
         
     print('\nTest set: Average loss: {:.4f}, Accuracy: {}/{} ({:.0f}%)\n'.format(
         test_loss, correct, len(test_data),
         100. * correct / len(test_data)))
+
+def plot_images(args, model, device, test_data, test_label, attribution_method, num=10, indices=None):
+    model.eval()
+    if indices is not None:
+        data_len = len(indices)
+        idx = indices
+    else:
+        data_len = num
+        idx = np.arange(len(test_data))
+        np.random.shuffle(idx)
+    
+    for i in range(0, data_len, args.test_batch_size):
+        if(i+args.test_batch_size>data_len):
+            temp = idx[i:data_len]
+        else:
+            temp = idx[i:i+args.test_batch_size]
+        
+        batch_data = test_data[temp,:,:,:]
+        batch_label = test_label[temp]  
+        g = loss_grad(model, torch.from_numpy(batch_data).to(device).requires_grad_(True), torch.from_numpy(batch_label).to(device), args.classifier_type)
+ 
+        for j in range(batch_data.shape[0]):
+            temp = (batch_data[j]*0.3081)+0.1307
+            temp = np.squeeze(temp)
+            plt.imshow(1-temp, cmap='binary', interpolation='nearest')
+            plt.savefig('images/samples/orig_img_'+str(idx[i+j])+'.png')
+            plt.close()
+            batch_data[j,:,:,:], v = attribution_method.apply_attribution(batch_data[j,:,:,:].copy(), g[j])
+            
+            #attribution_method.contribution_signs(batch_data[j,:,:,:].copy(), g[j])
+            temp = (batch_data[j]*0.3081)+0.1307
+            temp = np.squeeze(temp)
+            plt.imshow(1-temp, cmap='binary', interpolation='nearest')
+            plt.savefig('images/samples/mod_KAR_img_'+str(idx[i+j])+'.png')
+            plt.close()
+
 
 def main():
     parser = argparse.ArgumentParser(description='PyTorch MNIST example')
@@ -231,7 +207,7 @@ def main():
             help='Value to replace the occluded part of input by')
     parser.add_argument('--replacement-value', type=float, default=0,
             help='if replacement-type is custom use this value')
-    parser.add_argument('--model-path', type=str, default=None,
+    parser.add_argument('--model-path', nargs='+', type=str, default=None,
             help='Provide path and filename to save model')
     args = parser.parse_args()
     
@@ -255,8 +231,8 @@ def main():
     dataset2 = datasets.MNIST('../data', train=False,
             transform=transform)
     
-    attribution_method = attribution_methods.AttributionMethods(args.ROAR, args.occlude, 28, args.attribution_method,
-            replacement=args.replacement_type, dataset_min=-0.1307/0.3081, custom_value=args.replacement_value) 
+    #attribution_method = attribution_methods.AttributionMethods(args.ROAR, args.occlude, 28, args.attribution_method,
+    #        replacement=args.replacement_type, dataset_min=-0.1307/0.3081, custom_value=args.replacement_value) 
     #train_data = dataset1.data.numpy()
     #test_data = dataset2.data.numpy()
     train_label = dataset1.targets.numpy()
@@ -289,19 +265,15 @@ def main():
     
     
     model = Net(num_classes=args.num_classes, classifier_type=args.classifier_type).to(device)
-    optimizer = optim.Adadelta(model.parameters(), lr=args.lr)
-
-    scheduler = StepLR(optimizer, step_size=1, gamma=args.gamma)
-    for epoch in range(1, args.epochs + 1):
-        #train(args, model, device, train_loader, optimizer, epoch)
-        train_raw_data(args, model, device, train_data, train_label, optimizer, epoch)
-        #test(model, device, test_loader)
-        scheduler.step()
-    test_raw_data(args, model, device, test_data, test_label)
-    #test_attributed_data(args, model, device, test_data, test_label, attribution_method)
-    if args.save_model:
-        torch.save(model.state_dict(), args.model_path)
-
-if __name__ == '__main__':
+    for m in args.model_path:
+        attribution_method = attribution_methods.AttributionMethods(args.ROAR, args.occlude, 28, args.attribution_method,
+            replacement=args.replacement_type, dataset_min=-0.1307/0.3081, custom_value=args.replacement_value) 
+    
+        model.load_state_dict(torch.load(m))
+        test_raw_data(args, model, device, test_data, test_label)
+        test_attributed_data(args, model, device, test_data, test_label, attribution_method)
+    #plot_images(args, model, device, test_data, test_label, attribution_method, num=10)
+ 
+if __name__=="__main__":
+    
     main()
-
