@@ -22,22 +22,23 @@ def main():
 
     # Experiment 1: Predict at different occlusion levels 10%-90% in increments of 20% and 782 pixels for MNIST
     occ = ((np.arange(0, 1, 0.2)+0.1)*784).astype(np.int)
-    with open("test.txt", "w") as f:
-        f.write("Accuracy\tReplacement\tOcclusion\tAttribution\tVersion\tClassifier\n")
-    with open("test.txt", "a+") as r:
-        r.read()
-        r.write("1\t1\t1\t1\t1\t1")
+    #with open("test.txt", "w") as f:
+    #    f.write("Accuracy\tReplacement\tOcclusion\tAttribution\tVersion\tClassifier\n")
+    #with open("test.txt", "a+") as r:
+    #    r.read()
+    #    r.write("1\t1\t1\t1\t1\t1")
     
-    with open("test.txt", "r") as r:
-        print(r.read())
+    #with open("test.txt", "r") as r:
+    #    print(r.read())
     
-   
-    input(occ)
+    occ = np.append(782, occ)
+    print(occ)
+    #input(occ)
         
     for i in range(len(occ)):
         call = ["python", "src/experiments_mnist.py", "--num-classes", str(2), "--test-batch-size", str(64),
-            "--occlude", str(occ[i]), "--attribution-method", "grad_inp", "--ROAR", str(1), "--epochs", str(5),
-            "--classifier-type", "softmax", "--model-path", "model_data/mnist_models/logsoft2/mnist1.pt"]   
+            "--occlude", str(occ[i]), "--attribution-method", "grad_orig", "--ROAR", str(0), "--epochs", str(5),
+            "--classifier-type", "softmax", "--replacement-type", "dataset_min", "--model-path", "model_data/mnist_models/logsoft2/mnist1.pt", "model_data/mnist_models/logsoft2/mnist2.pt", "model_data/mnist_models/logsoft2/mnist3.pt", "model_data/mnist_models/logsoft2/mnist4.pt", "model_data/mnist_models/logsoft2/mnist5.pt"]   
 
         subprocess.run(call)
 

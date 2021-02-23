@@ -28,13 +28,16 @@ class AttributionMethods():
         return
     def contribution_signs(self, input_data, grad=None):
         contribution_signs = np.zeros((3,3))
-        self.apply_attribution(input_data.copy(), grad.copy())
-        temp_data = input_data.flatten()
+        _, v = self.apply_attribution(input_data.copy(), grad.copy())
+        temp_data = input_data[:, v//self.mel_bins, v%self.mel_bins].flatten()
+
+ 
         if self.rank_matrix is None:
             print('Not applicable')
             return None
 
-        temp_grad = self.rank_matrix.flatten()
+        temp_grad = self.rank_matrix[:, v//self.mel_bins, v%self.mel_bins].flatten()
+
         for i in range(len(temp_data)):
             if(temp_data[i]>0):
                 ind1=0
@@ -82,7 +85,13 @@ class AttributionMethods():
             input_data[:,v//self.mel_bins, v%self.mel_bins] = self.dataset_min
         elif(self.replacement=='custom'):
             input_data[:,v//self.mel_bins, v%self.mel_bins] = self.custom_value
- 
+        elif(self.replacement=='image_min'):
+            val = np.min(input_data)
+            input_data[:, v//self.mel_bins, v%self.mel_bins] = 3*val
+        elif(self.replacement=='image_max'):
+            val = np.max(input_data)
+            input_data[:, v//self.mel_bins, v%self.mel_bins] = val
+        
         return input_data, v
 
 

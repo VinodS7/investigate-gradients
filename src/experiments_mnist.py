@@ -50,6 +50,11 @@ def test_raw_data(args, model, device, test_data, test_label):
             if(args.classifier_type=='softmax'):
                 test_loss+= F.nll_loss(output, torch.from_numpy(batch_label).to(device))
                 pred = output.argmax(dim=1, keepdim=True)
+                temp = pred.eq(torch.from_numpy(batch_label).to(device).view_as(pred)).numpy() 
+                temp = i+np.where(temp==False)[0]
+                if temp.size>0:
+                    input(temp)
+            
                 correct += pred.eq(torch.from_numpy(batch_label).to(device).view_as(pred)).sum().item()
             elif(args.classifier_type=='sigmoid'):
                 test_loss+= F.binary_cross_entropy(torch.squeeze(output), torch.from_numpy(batch_label.astype(np.float32)).to(device))
@@ -114,27 +119,32 @@ def test_attributed_data(args, model, device, test_data, test_label, attribution
         #print(g.shape)
         #input(s.shape)
         for j in range(batch_data.shape[0]):
+            #attribution_method.contribution_signs(batch_data[j,:,:,:].copy(), g[j])
             batch_data[j,:,:,:], v = attribution_method.apply_attribution(batch_data[j,:,:,:].copy(), g[j])
-            attribution_method.contribution_signs(batch_data[j,:,:,:].copy(), g[j])
         output = model(torch.from_numpy(batch_data).to(device))
         if(args.classifier_type=='softmax'):
             test_loss+= F.nll_loss(output, torch.from_numpy(batch_label).to(device))
             pred = output.argmax(dim=1, keepdim=True)
+            temp = pred.eq(torch.from_numpy(batch_label).to(device).view_as(pred)).numpy() 
+            temp = i+np.where(temp==False)[0]
+            #if temp.size>0:
+            #    input(temp)
             correct += pred.eq(torch.from_numpy(batch_label).to(device).view_as(pred)).sum().item()
         elif(args.classifier_type=='sigmoid'):
             test_loss+= F.binary_cross_entropy(torch.squeeze(output), torch.from_numpy(batch_label.astype(np.float32)).to(device))
             pred = torch.round(output)
             pred = pred.type(torch.int64)
             correct += pred.eq(torch.from_numpy(batch_label).to(device).view_as(pred)).sum().item()
-    print('positive inputs: ',attribution_method.ctrb_sgns[0,:])
-    print('negative inputs: ', attribution_method.ctrb_sgns[1,:])
-    print('zero inputs: ', attribution_method.ctrb_sgns[2,:])
+    #print('positive inputs: ',attribution_method.ctrb_sgns[0,:])
+    #print('negative inputs: ', attribution_method.ctrb_sgns[1,:])
+    #print('zero inputs: ', attribution_method.ctrb_sgns[2,:])
     #input(attribution_method.ctrb_sgns/np.sum(attribution_method.ctrb_sgns))
     test_loss /= len(test_data)
         
     print('\nTest set: Average loss: {:.4f}, Accuracy: {}/{} ({:.0f}%)\n'.format(
         test_loss, correct, len(test_data),
         100. * correct / len(test_data)))
+    return correct/len(test_data)
 
 def plot_images(args, model, device, test_data, test_label, attribution_method, num=10, indices=None):
     model.eval()
@@ -159,18 +169,21 @@ def plot_images(args, model, device, test_data, test_label, attribution_method, 
         for j in range(batch_data.shape[0]):
             temp = (batch_data[j]*0.3081)+0.1307
             temp = np.squeeze(temp)
-            plt.imshow(1-temp, cmap='binary', interpolation='nearest')
-            plt.savefig('images/samples/orig_img_'+str(idx[i+j])+'.png')
+            plt.imshow(temp, cmap='gray', vmin=0, vmax=1, interpolation='nearest')
+            plt.axis('off')
+            plt.savefig('images/mnist1_inv/orig_img_'+str(idx[i+j])+'.png',bbox_inches='tight', pad_inches=0)
             plt.close()
             batch_data[j,:,:,:], v = attribution_method.apply_attribution(batch_data[j,:,:,:].copy(), g[j])
-            
             #attribution_method.contribution_signs(batch_data[j,:,:,:].copy(), g[j])
             temp = (batch_data[j]*0.3081)+0.1307
             temp = np.squeeze(temp)
-            plt.imshow(1-temp, cmap='binary', interpolation='nearest')
-            plt.savefig('images/samples/mod_KAR_img_'+str(idx[i+j])+'.png')
+            plt.imshow(temp, cmap='gray', vmin=0, vmax=1, interpolation='nearest')
+            plt.axis('off')
+            plt.savefig('images/mnist1_inv/mod_img_'+str(idx[i+j])+args.attribution_method+'.png', bbox_inches='tight', pad_inches=0)
             plt.close()
 
+        output = model(torch.from_numpy(batch_data).to(device))
+        print(output.argmax(dim=1, keepdim=True))
 
 def main():
     parser = argparse.ArgumentParser(description='PyTorch MNIST example')
@@ -265,15 +278,16 @@ def main():
     
     
     model = Net(num_classes=args.num_classes, classifier_type=args.classifier_type).to(device)
+    c = 0
     for m in args.model_path:
         attribution_method = attribution_methods.AttributionMethods(args.ROAR, args.occlude, 28, args.attribution_method,
             replacement=args.replacement_type, dataset_min=-0.1307/0.3081, custom_value=args.replacement_value) 
     
-        model.load_state_dict(torch.load(m))
-        test_raw_data(args, model, device, test_data, test_label)
-        test_attributed_data(args, model, device, test_data, test_label, attribution_method)
-    #plot_images(args, model, device, test_data, test_label, attribution_method, num=10)
- 
+        model.load_state_dict(torch.load(m, map_location=device))
+        #test_raw_data(args, model, device, test_data, test_label)
+        c += test_attributed_data(args, model, device, test_data, test_label, attribution_method)
+        #plot_images(args, model, device, test_data, test_label, attribution_method, num=10, indices = np.array([1,2,3,4,5,6,7,8,9,10]))
+    print(c/5)       
 if __name__=="__main__":
     
     main()
